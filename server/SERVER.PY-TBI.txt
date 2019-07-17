@@ -1,0 +1,122 @@
+# filename: server.py
+# this is the server that executes the prediction
+# make sure to install flask
+# updated: 2018.9.24
+# by: SKKU LEMA
+
+
+import numpy as np
+import flask
+import redis
+import uuid
+import time
+import json
+import sys
+import io
+import random
+import os
+from threading import Thread
+
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Flatten, SimpleRNN
+from keras.layers import LSTM, Embedding,Input
+from keras.models import load_model
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc, classification_report, confusion_matrix, accuracy_score
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+
+app = flask.Flask(__name__)
+modelM = None
+modelR = None
+modelL = None
+modelYes = False
+
+	
+
+
+
+
+@app.route("/predict", methods=["POST"])
+def predict():
+	# initialize the data dictionary that will be returned from the
+	# view
+	data = {"success": False}
+
+	# ensure an image was properly uploaded to our endpoint
+	if flask.request.method == "POST":
+
+			patient = flask.request.form.get("a")
+			patient = patient.split(",")
+			patienta = [ [int(x)] for x in patient ]
+			patientb = [ int(x) for x in patient ]
+			#a = []
+			#for i in range(1,55):
+	    		#	x = random.randint(0,1)
+    			#	a.append([x])
+
+			a = np.array(np.array(patienta, dtype=float))
+			
+			b = np.array(np.array(patientb, dtype=float))
+			a = a.reshape(1,1,54)
+			b = [[b]]
+
+	
+			global modelM
+			global modelR
+			global modelL
+			global modelYes
+			if (modelYes == False):
+				modelFile = os.getcwd() + '/models/m_mlp_ds3m.5'
+				modelWeightFile = os.getcwd() + '/models/m_mlp_ds3w.5'
+				modelM = load_model(modelFile)
+				modelM.load_weights(modelWeightFile)	
+				
+				modelFile = os.getcwd() + '/models/m_rnn_ds3m.5'
+				modelWeightFile = os.getcwd() + '/models/m_rnn_ds3w.5'
+				modelR = load_model(modelFile)
+				modelR.load_weights(modelWeightFile)
+				
+				modelFile = os.getcwd() + '/models/m_lstm_ds3m.5'
+				modelWeightFile = os.getcwd() + '/models/m_lstm_ds3w.5'
+				modelL = load_model(modelFile)
+				modelL.load_weights(modelWeightFile)
+
+
+
+			modelYes = True
+			r = modelM.predict(b)
+			time.sleep(0.25)
+			data["mlp"] = "0"
+			if (r[0][0]>.5):
+				data["mlp"] ="1"
+			
+			r = modelR.predict(a)
+			time.sleep(0.25)
+			data["rnn"] = "0"
+			if (r[0][0]>.5):
+				data["rnn"] ="1"
+			
+			r = modelL.predict(a)
+			time.sleep(0.25)
+			data["lstm"] = "0"
+			if (r[0][0]>.5):
+				data["lstm"] ="1"
+
+			data["success"] = True
+# return the data dictionary as a JSON response
+	return flask.jsonify(data)
+
+# if this is the main thread of execution first load the model and
+# then start the server
+if __name__ == "__main__":
+	# load the function used to classify input images in a *separate*
+	# thread than the one used for main classification
+	print("* Starting model service...")
+
+	#Load My Model
+	#load_my_model()
+	# start the web server
+	print("* Starting web service...")
+	app.run()
